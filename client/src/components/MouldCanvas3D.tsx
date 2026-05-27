@@ -17,6 +17,9 @@ interface MouldCanvas3DProps {
   shutterColors: { [key: number]: string };
   customMesh: ParsedMesh | null;
   meshName: string;
+  showRibs: boolean;
+  ribHeight: number;
+  ribSpacing: number;
 }
 
 // Point3D and Face imported from stlParser
@@ -34,7 +37,10 @@ export default function MouldCanvas3D({
   onAssignFace,
   shutterColors,
   customMesh,
-  meshName
+  meshName,
+  showRibs,
+  ribHeight,
+  ribSpacing
 }: MouldCanvas3DProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   
@@ -476,6 +482,37 @@ export default function MouldCanvas3D({
       ctx.lineWidth = shutterId === selectedShutter ? 1.5 : 0.8;
       ctx.stroke();
 
+      // Draw structural fiberglass reinforcement backing ribs if enabled
+      if (showRibs && !isSimulatingRelease && face.id % Math.max(2, Math.floor(ribSpacing / 20)) === 0) {
+        // Project rib extrusion vector outward along the face normal
+        const normalExtrusion = ribHeight / 300; // Scale down for projection
+        
+        const r1 = project({
+          x: rabbitMesh.points[face.vertices[0]].x + face.normal.x * normalExtrusion,
+          y: rabbitMesh.points[face.vertices[0]].y + face.normal.y * normalExtrusion,
+          z: rabbitMesh.points[face.vertices[0]].z + normalExtrusion * face.normal.z
+        });
+        
+        const r2 = project({
+          x: rabbitMesh.points[face.vertices[1]].x + face.normal.x * normalExtrusion,
+          y: rabbitMesh.points[face.vertices[1]].y + face.normal.y * normalExtrusion,
+          z: rabbitMesh.points[face.vertices[1]].z + normalExtrusion * face.normal.z
+        });
+
+        // Draw reinforcement rib line (Double thickness, glowing purple/blue)
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(r1.x, r1.y);
+        ctx.lineTo(r2.x, r2.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.closePath();
+        ctx.fillStyle = shutterId === selectedShutter ? 'rgba(168, 85, 247, 0.25)' : 'rgba(59, 130, 246, 0.15)';
+        ctx.fill();
+        ctx.strokeStyle = shutterId === selectedShutter ? 'rgba(168, 85, 247, 0.75)' : 'rgba(59, 130, 246, 0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
       // Draw Flange simulation on boundaries
       if (showFlanges && !isSimulatingRelease) {
         // If this face is near a split line (bordering other shutters)
@@ -598,7 +635,7 @@ export default function MouldCanvas3D({
     ctx.fillStyle = 'rgba(59, 130, 246, 0.8)';
     ctx.fillText('Z', compassX + (pz.x - canvas.width/2)/2 + 4, compassY - (pz.y - canvas.height/2)/2 + 3);
 
-  }, [rotation, zoom, scaleFactor, rabbitMesh, shutterCount, selectedShutter, shutterReleaseVectors, shutterAssignments, isSimulatingRelease, releaseProgress, showUndercuts, showFlanges, flangeWidth, boltSpacing]);
+  }, [rotation, zoom, scaleFactor, rabbitMesh, shutterCount, selectedShutter, shutterReleaseVectors, shutterAssignments, isSimulatingRelease, releaseProgress, showUndercuts, showFlanges, flangeWidth, boltSpacing, showRibs, ribHeight, ribSpacing]);
 
   // Count undercuts for current configuration
   const undercutCount = useMemo(() => {

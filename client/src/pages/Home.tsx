@@ -4,7 +4,7 @@ import {
   HelpCircle, ChevronRight, CheckCircle2, RefreshCw, 
   Sliders, ArrowUpRight, Plus, Trash2, ArrowRightLeft,
   ChevronDown, Cpu, Sparkles, BookOpen, AlertTriangle,
-  UploadCloud, FileUp
+  UploadCloud, FileUp, Eye
 } from 'lucide-react';
 import MouldCanvas3D from '@/components/MouldCanvas3D';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,11 @@ export default function Home() {
   // Custom Mesh Upload State
   const [customMesh, setCustomMesh] = useState<ParsedMesh | null>(null);
   const [meshName, setMeshName] = useState<string>("STYLIZED_RABBIT_PLUG.STL");
+
+  // Fiberglass Backing Ribs parameters
+  const [showRibs, setShowRibs] = useState<boolean>(true);
+  const [ribHeight, setRibHeight] = useState<number>(40); // 40mm height
+  const [ribSpacing, setRibSpacing] = useState<number>(60); // 60mm spacing
 
   // Shutter state
   const [selectedShutter, setSelectedShutter] = useState<number>(1);
@@ -492,6 +497,58 @@ export default function Home() {
                 className="w-full accent-primary cursor-pointer"
               />
             </div>
+
+            {/* Backing Ribs Toggle & Controls */}
+            <div className="border border-border/60 bg-secondary/10 p-3 rounded-sm space-y-3 mt-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Eye className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-2xs font-bold text-foreground uppercase tracking-wider">Backing Reinforcement</span>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={showRibs}
+                  onChange={(e) => setShowRibs(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded-sm border-border bg-background accent-primary cursor-pointer"
+                />
+              </div>
+
+              {showRibs && (
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between text-3xs text-muted-foreground">
+                      <span>RIB HEIGHT</span>
+                      <span className="text-foreground font-bold">{ribHeight} mm</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="10" 
+                      max="100" 
+                      step="5"
+                      value={ribHeight}
+                      onChange={(e) => setRibHeight(parseInt(e.target.value))}
+                      className="w-full h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between text-3xs text-muted-foreground">
+                      <span>RIB SPACING</span>
+                      <span className="text-foreground font-bold">{ribSpacing} mm</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="20" 
+                      max="150" 
+                      step="10"
+                      value={ribSpacing}
+                      onChange={(e) => setRibSpacing(parseInt(e.target.value))}
+                      className="w-full h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Shutter Partition Toolset */}
@@ -581,6 +638,9 @@ export default function Home() {
                 shutterColors={shutterColors}
                 customMesh={customMesh}
                 meshName={meshName}
+                showRibs={showRibs}
+                ribHeight={ribHeight}
+                ribSpacing={ribSpacing}
               />
             </div>
           </div>

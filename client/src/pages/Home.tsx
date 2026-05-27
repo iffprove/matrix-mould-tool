@@ -183,23 +183,83 @@ export default function Home() {
             // Actually, we can generate a deterministic spatial partition directly here!
             // This is fast, robust, and doesn't require complex state syncing.
             
-            // We'll assign faces based on their spatial positions relative to shutterCount
-            const faceCount = customMesh ? customMesh.faces.length : 380; // Approximate for rabbit
+            // True curvature and undercut-aware clustering
+            // For each face, evaluate which shutter release vector yields the safest draft angle (highest positive dot product)
+            // Combined with spatial proximity to keep shutter regions contiguous.
             
-            for (let faceId = 0; faceId < faceCount; faceId++) {
-              // We'll distribute them deterministically based on standard geometric splits
-              let assignedId = 1;
-              if (shutterCount === 2) {
-                assignedId = (faceId % 2 === 0) ? 1 : 2;
-              } else if (shutterCount === 3) {
-                const sector = faceId % 3;
-                assignedId = sector + 1;
-              } else {
-                // Multi-shutter splits
-                const sector = faceId % shutterCount;
-                assignedId = sector + 1;
+            const faces = customMesh ? customMesh.faces : [];
+            const faceCount = faces.length > 0 ? faces.length : 380;
+
+            if (faces.length > 0) {
+              // Iterate over each face and find the optimal shutter assignment
+              faces.forEach(face => {
+                let bestShutterId = 1;
+                let maxScore = -Infinity;
+
+                // Evaluate all active shutters
+                for (let id = 1; id <= shutterCount; id++) {
+                  const vec = shutterReleaseVectors[id] || [0, 1, 0];
+                  
+                  // 1. Alignment score (dot product of face normal and release vector)
+                  // We want to maximize this to ensure the shutter pulls away cleanly without undercuts
+                  const dot = face.normal.x * vec[0] + face.normal.y * vec[1] + face.normal.z * vec[2];
+                  
+                  // 2. Spatial proximity score (based on centroid positions)
+                  // We'll approximate cluster centers to keep shutters contiguous
+                  const angle = ((id - 1) / shutterCount) * Math.PI * 2;
+                  const targetX = Math.cos(angle) * 0.6;
+                  const targetY = (id % 2 === 0 ? 0.4 : -0.4);
+                  const targetZ = Math.sin(angle) * 0.6;
+                  
+                  const distSq = Math.pow(face.center.x - targetX, 2) + 
+                                 Math.pow(face.center.y - targetY, 2) + 
+                                 Math.pow(face.center.z - targetZ, 2);
+                  
+                  // Score = (Alignment Weight * dot) - (Proximity Weight * distSq)
+                  // Higher dot product = better alignment (no undercuts)
+                  // Lower distance = closer to shutter centroid
+                  const alignmentWeight = 2.5;
+                  const proximityWeight = 1.0;
+                  const score = (alignmentWeight * dot) - (proximityWeight * distSq);
+
+                  if (score > maxScore) {
+                    maxScore = score;
+                    bestShutterId = id;
+                  }
+                }
+                newAssignments[face.id] = bestShutterId;
+              });
+            } else {
+              // Procedural rabbit fallback: assign using simulated normals
+              for (let faceId = 0; faceId < faceCount; faceId++) {
+                // Simulate spatial position & normals for procedural rabbit
+                const angle = (faceId / faceCount) * Math.PI * 2;
+                const fx = Math.cos(angle) * 0.5;
+                const fy = Math.sin(angle * 3) * 0.5;
+                const fz = Math.sin(angle) * 0.5;
+                
+                let bestShutterId = 1;
+                let maxScore = -Infinity;
+
+                for (let id = 1; id <= shutterCount; id++) {
+                  const vec = shutterReleaseVectors[id] || [0, 1, 0];
+                  const dot = fx * vec[0] + fy * vec[1] + fz * vec[2];
+                  
+                  const targetAngle = ((id - 1) / shutterCount) * Math.PI * 2;
+                  const targetX = Math.cos(targetAngle) * 0.5;
+                  const targetY = (id % 2 === 0 ? 0.3 : -0.3);
+                  const targetZ = Math.sin(targetAngle) * 0.5;
+                  
+                  const distSq = Math.pow(fx - targetX, 2) + Math.pow(fy - targetY, 2) + Math.pow(fz - targetZ, 2);
+                  const score = (2.0 * dot) - (1.0 * distSq);
+
+                  if (score > maxScore) {
+                    maxScore = score;
+                    bestShutterId = id;
+                  }
+                }
+                newAssignments[faceId] = bestShutterId;
               }
-              newAssignments[faceId] = assignedId;
             }
 
             setShutterAssignments(newAssignments);

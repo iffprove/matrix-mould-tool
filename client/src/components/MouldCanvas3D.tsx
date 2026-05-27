@@ -208,23 +208,115 @@ export default function MouldCanvas3D({
     return () => clearInterval(interval);
   }, [isSimulatingRelease]);
 
-  // Mouse drag handlers for 3D orbit
+  // Helper to check if a 2D point is inside a triangle (used for face selection/painting)
+  const isPointInTriangle = (px: number, py: number, ax: number, ay: number, bx: number, by: number, cx: number, cy: number) => {
+    const v0x = cx - ax;
+    const v0y = cy - ay;
+    const v1x = bx - ax;
+    const v1y = by - ay;
+    const v2x = px - ax;
+    const v2y = py - ay;
+
+    const dot00 = v0x * v0x + v0y * v0y;
+    const dot01 = v0x * v1x + v0y * v1y;
+    const dot02 = v0x * v2x + v0y * v2y;
+    const dot11 = v1x * v1x + v1y * v1y;
+    const dot12 = v1x * v2x + v1y * v2y;
+
+    const invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
+    const u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+    const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+
+    return (u >= 0) && (v >= 0) && (u + v < 1);
+  };
+
+  // Find which face is clicked/hovered under mouse coordinates
+  const findFaceAtCoordinates = (mouseX: number, mouseY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+
+    const cosX = Math.cos(rotation.x);
+    const sinX = Math.sin(rotation.x);
+    const cosY = Math.cos(rotation.y);
+    const sinY = Math.sin(rotation.y);
+
+    const project = (p: Point3D) => {
+      let x1 = p.x * cosY - p.z * sinY;
+      let z1 = p.x * sinY + p.z * cosY;
+      let y2 = p.y * cosX - z1 * sinX;
+      let z2 = p.y * sinX + z1 * cosX;
+      return {
+        x: canvas.width / 2 + x1 * zoom * scaleFactor,
+        y: canvas.height / 2 - y2 * zoom * scaleFactor,
+        depth: z2
+      };
+    };
+
+    let closestFaceId: number | null = null;
+    let maxDepth = -Infinity; // Find the topmost face closest to camera (largest depth value)
+
+    rabbitMesh.faces.forEach(face => {
+      const p1 = project(rabbitMesh.points[face.vertices[0]]);
+      const p2 = project(rabbitMesh.points[face.vertices[1]]);
+      const p3 = project(rabbitMesh.points[face.vertices[2]]);
+
+      if (isPointInTriangle(mouseX, mouseY, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y)) {
+        const avgDepth = (p1.depth + p2.depth + p3.depth) / 3;
+        if (avgDepth > maxDepth) {
+          maxDepth = avgDepth;
+          closestFaceId = face.id;
+        }
+      }
+    });
+
+    return closestFaceId;
+  };
+
+  // Mouse drag handlers for 3D orbit and Paint tool
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    if (selectedTool === 'paint') {
+      setIsDragging(true);
+      const clickedFaceId = findFaceAtCoordinates(mouseX, mouseY);
+      if (clickedFaceId !== null) {
+        onAssignFace(clickedFaceId, selectedShutter);
+      }
+    } else {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging) return;
-    const dx = e.clientX - dragStart.x;
-    const dy = e.clientY - dragStart.y;
-    
-    setRotation(prev => ({
-      x: prev.x + dy * 0.01,
-      y: prev.y + dx * 0.01
-    }));
-    
-    setDragStart({ x: e.clientX, y: e.clientY });
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    if (isDragging && selectedTool === 'paint') {
+      const hoveredFaceId = findFaceAtCoordinates(mouseX, mouseY);
+      if (hoveredFaceId !== null) {
+        onAssignFace(hoveredFaceId, selectedShutter);
+      }
+    } else if (isDragging) {
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      
+      setRotation(prev => ({
+        x: prev.x + dy * 0.01,
+        y: prev.y + dx * 0.01
+      }));
+      
+      setDragStart({ x: e.clientX, y: e.clientY });
+    }
   };
 
   const handleMouseUp = () => {

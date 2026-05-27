@@ -10,6 +10,7 @@ import MouldCanvas3D from '@/components/MouldCanvas3D';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { parseSTL, ParsedMesh } from '@/lib/stlParser';
+import { generateFlangeDXF } from '@/lib/dxfExporter';
 
 export default function Home() {
   // Global Mould Parameters
@@ -128,10 +129,31 @@ export default function Home() {
 
   const handleExportMould = () => {
     toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 2000)),
+      new Promise<void>((resolve, reject) => {
+        setTimeout(() => {
+          try {
+            const dxfContent = generateFlangeDXF(customMesh, shutterAssignments, flangeWidth, boltSpacing);
+            
+            // Create a blob and download it
+            const blob = new Blob([dxfContent], { type: 'application/dxf' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${meshName.replace(/\.[^/.]+$/, "")}_flange_layout.dxf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        }, 1500);
+      }),
       {
-        loading: 'Generating parametric shutter meshes, flanges, and bolt hole arrays...',
-        success: 'Mould geometry exported successfully! Shutter meshes (STL) and drilling layout (DXF) are ready.',
+        loading: 'Generating parametric 2D flange outlines and bolt hole arrays...',
+        success: 'DXF joint layout generated successfully! File downloaded for CNC/laser cutting.',
         error: 'Export failed.',
       }
     );

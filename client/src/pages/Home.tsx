@@ -3,11 +3,13 @@ import {
   Wrench, Layers, Settings, ShieldAlert, FileDown, 
   HelpCircle, ChevronRight, CheckCircle2, RefreshCw, 
   Sliders, ArrowUpRight, Plus, Trash2, ArrowRightLeft,
-  ChevronDown, Cpu, Sparkles, BookOpen, AlertTriangle
+  ChevronDown, Cpu, Sparkles, BookOpen, AlertTriangle,
+  UploadCloud, FileUp
 } from 'lucide-react';
 import MouldCanvas3D from '@/components/MouldCanvas3D';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { parseSTL, ParsedMesh } from '@/lib/stlParser';
 
 export default function Home() {
   // Global Mould Parameters
@@ -16,6 +18,10 @@ export default function Home() {
   const [boltSpacing, setBoltSpacing] = useState<number>(150); // 150mm default
   const [shellThickness, setShellThickness] = useState<number>(12); // 12mm default
   const [shutterCount, setShutterCount] = useState<number>(5); // 5 shutters default
+
+  // Custom Mesh Upload State
+  const [customMesh, setCustomMesh] = useState<ParsedMesh | null>(null);
+  const [meshName, setMeshName] = useState<string>("STYLIZED_RABBIT_PLUG.STL");
 
   // Shutter state
   const [selectedShutter, setSelectedShutter] = useState<number>(1);
@@ -131,6 +137,35 @@ export default function Home() {
     );
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.stl')) {
+      toast.error("Only .STL files are supported in this version.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const buffer = event.target?.result as ArrayBuffer;
+      try {
+        const parsed = parseSTL(buffer);
+        if (parsed.faces.length === 0) {
+          throw new Error("No faces parsed from STL file.");
+        }
+        setShutterAssignments({}); // Reset previous assignments
+        setCustomMesh(parsed);
+        setMeshName(file.name);
+        toast.success(`Successfully loaded ${file.name} (${parsed.faces.length} triangles)`);
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to parse STL file. Please ensure it is a valid ASCII or Binary STL.");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col font-mono">
       
@@ -171,6 +206,42 @@ export default function Home() {
         {/* Left Panel: Global Parameters & Tool Settings (Cols 1-3) */}
         <div className="lg:col-span-3 flex flex-col gap-6">
           
+          {/* Mesh Upload & Calibration */}
+          <div className="blueprint-panel p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-2 border-b border-border pb-2">
+              <UploadCloud className="w-4 h-4 text-primary" />
+              <h2 className="text-sm font-bold tracking-wider text-primary">UPLOAD PLUG MESH</h2>
+            </div>
+
+            {/* STL Upload */}
+            <div className="flex flex-col gap-2">
+              <label className="flex flex-col items-center justify-center border border-dashed border-border/80 rounded-sm p-4 bg-black/10 hover:bg-black/20 hover:border-primary/50 cursor-pointer transition-all">
+                <FileUp className="w-6 h-6 text-primary mb-1.5 animate-pulse" />
+                <span className="text-xs text-foreground font-bold">SELECT LOCAL STL</span>
+                <span className="text-3xs text-muted-foreground mt-1">Binary or ASCII format</span>
+                <input 
+                  type="file" 
+                  accept=".stl" 
+                  onChange={handleFileUpload} 
+                  className="hidden" 
+                />
+              </label>
+              {customMesh && (
+                <button
+                  onClick={() => {
+                    setCustomMesh(null);
+                    setMeshName("STYLIZED_RABBIT_PLUG.STL");
+                    setShutterAssignments({});
+                    toast.info("Reset to default Rabbit plug model.");
+                  }}
+                  className="w-full py-1 bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/30 text-2xs font-bold rounded-sm transition-all"
+                >
+                  RESET TO DEFAULT MODEL
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Mould Calibration Parameters */}
           <div className="blueprint-panel p-5 flex flex-col gap-4">
             <div className="flex items-center gap-2 border-b border-border pb-2">
@@ -338,6 +409,8 @@ export default function Home() {
                 shutterAssignments={shutterAssignments}
                 onAssignFace={handleAssignFace}
                 shutterColors={shutterColors}
+                customMesh={customMesh}
+                meshName={meshName}
               />
             </div>
           </div>

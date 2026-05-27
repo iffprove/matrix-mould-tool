@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Play, RotateCcw, ShieldCheck, AlertTriangle, Eye, ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 
+import { Point3D, Face, ParsedMesh } from '@/lib/stlParser';
+
 interface MouldCanvas3DProps {
   shutterCount: number;
   flangeWidth: number;
@@ -13,21 +15,11 @@ interface MouldCanvas3DProps {
   shutterAssignments: { [faceId: number]: number };
   onAssignFace: (faceId: number, shutterId: number) => void;
   shutterColors: { [key: number]: string };
+  customMesh: ParsedMesh | null;
+  meshName: string;
 }
 
-// Simulated STL / 3D model vertices for a high-quality Rabbit
-interface Point3D {
-  x: number;
-  y: number;
-  z: number;
-}
-
-interface Face {
-  id: number;
-  vertices: [number, number, number]; // Index of points
-  normal: Point3D;
-  center: Point3D;
-}
+// Point3D and Face imported from stlParser
 
 export default function MouldCanvas3D({
   shutterCount,
@@ -40,7 +32,9 @@ export default function MouldCanvas3D({
   selectedTool,
   shutterAssignments,
   onAssignFace,
-  shutterColors
+  shutterColors,
+  customMesh,
+  meshName
 }: MouldCanvas3DProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   
@@ -54,9 +48,9 @@ export default function MouldCanvas3D({
   const [showUndercuts, setShowUndercuts] = useState(true);
   const [showFlanges, setShowFlanges] = useState(true);
 
-  // Generate a realistic "Rabbit" mesh procedural model
-  // This ensures we have high-quality, reliable, interactive 3D model data instantly without failing file loads
+  // Generate a realistic "Rabbit" mesh procedural model if no custom mesh is uploaded
   const rabbitMesh = useMemo(() => {
+    if (customMesh) return customMesh;
     const points: Point3D[] = [];
     const faces: Face[] = [];
     
@@ -171,17 +165,17 @@ export default function MouldCanvas3D({
     return { points, faces };
   }, []);
 
-  // Set up face shutter assignments procedurally on initial render
+  // Set up face shutter assignments procedurally when mesh or shutter count changes
   useEffect(() => {
     rabbitMesh.faces.forEach(face => {
       // If face doesn't have an assignment, group them by basic spatial partitions
-      if (shutterAssignments[face.id] === undefined) {
+      if (shutterAssignments[face.id] === undefined || shutterAssignments[face.id] > shutterCount) {
         let assignedId = 1;
-        if (face.center.x < -0.1) {
+        if (face.center.x < -0.15) {
           assignedId = 2; // Left side shutter
-        } else if (face.center.x > 0.1) {
+        } else if (face.center.x > 0.15) {
           assignedId = 3; // Right side shutter
-        } else if (face.center.y > 0.8) {
+        } else if (face.center.y > 0.6) {
           assignedId = 4; // Top ear cap shutter
         } else if (face.center.z < -0.3) {
           assignedId = 5; // Back shutter
@@ -195,7 +189,7 @@ export default function MouldCanvas3D({
         onAssignFace(face.id, assignedId);
       }
     });
-  }, [rabbitMesh, shutterCount]);
+  }, [rabbitMesh, shutterCount, customMesh]);
 
   // Release simulation tick
   useEffect(() => {
@@ -547,7 +541,7 @@ export default function MouldCanvas3D({
         <div className="absolute top-4 left-4 flex flex-col gap-2">
           <div className="led-display flex items-center gap-2 bg-background/80 border border-border">
             <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span>MESH: STYLIZED_RABBIT_PLUG.STL</span>
+            <span>MESH: {meshName.toUpperCase()}</span>
           </div>
           <div className="led-display bg-background/80 border border-border">
             <span>SCALE: {(1000 * scaleFactor).toFixed(0)}mm (1:{scaleFactor.toFixed(1)})</span>
